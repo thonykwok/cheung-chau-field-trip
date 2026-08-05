@@ -138,7 +138,12 @@
             <div id="adminAnswersView" class="hidden space-y-3">
                 <h3 class="text-sm font-bold text-slate-700">學生提交紀錄</h3>
                 <div id="adminAnswersList" class="space-y-2 text-xs"></div>
-                <button onclick="exportAnswersCSV()" class="w-full py-2.5 bg-blue-600 text-white text-xs font-semibold rounded-xl">下載 CSV 匯出</button>
+                <div class="flex gap-2">
+                    <a href="https://docs.google.com/spreadsheets/d/1imqkcaee0bSMYuWf5YenNS5gxWOGvjl3bELJ1v8Nq2A/edit" target="_blank" class="flex-1 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl text-center flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-table"></i> 開啟 Google Sheet
+                    </a>
+                    <button onclick="exportAnswersCSV()" class="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl">下載 CSV</button>
+                </div>
             </div>
         </section>
 
@@ -642,9 +647,23 @@
         function closeSubmitModal() { document.getElementById("submitModal").classList.add("hidden"); }
 
         const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNae7IHh0Wl8qIbljoQQp9KGx9UToKEAufw9rJ0zGqWq7WkkLyOTkquIuC5LwgZVmxSA/exec";
+        const SUBMIT_COOLDOWN_MS = 60 * 60 * 1000; // 1 小時
 
         async function confirmFinalSubmit() {
             try {
+                // 檢查同一個組別 1 小時內有冇提交過
+                const oneHourAgo = new Date(Date.now() - SUBMIT_COOLDOWN_MS);
+                const existing = await db.collection("answers")
+                    .where("groupName", "==", appState.studentName)
+                    .where("timestamp", ">", oneHourAgo)
+                    .limit(1)
+                    .get();
+
+                if (!existing.empty) {
+                    alert("此組別於 1 小時內已提交過，請稍後再試。\n如需更改答案，請聯絡老師。");
+                    return;
+                }
+
                 // 1. 寫入 Firestore
                 await db.collection("answers").add({
                     groupName: appState.studentName,
@@ -671,7 +690,13 @@
                 closeSubmitModal();
                 alert("🎉 提交成功！答案已儲存至系統及 Google Sheet。");
             } catch (err) {
-                alert("提交失敗：" + err.message);
+                // 如果係索引錯誤，提示建立索引
+                if (err.message && err.message.includes("index")) {
+                    alert("提交失敗：需要建立 Firestore 索引。\n請睇 Console 入面嘅連結，撳入去建立索引後再試。");
+                    console.error(err);
+                } else {
+                    alert("提交失敗：" + err.message);
+                }
             }
         }
 
