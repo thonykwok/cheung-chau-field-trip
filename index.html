@@ -641,17 +641,38 @@
 
         function closeSubmitModal() { document.getElementById("submitModal").classList.add("hidden"); }
 
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwNae7IHh0Wl8qIbljoQQp9KGx9UToKEAufw9rJ0zGqWq7WkkLyOTkquIuC5LwgZVmxSA/exec";
+
         async function confirmFinalSubmit() {
             try {
+                // 1. 寫入 Firestore
                 await db.collection("answers").add({
                     groupName: appState.studentName,
                     answers: { ...appState.answers },
                     timestamp: firebase.firestore.FieldValue.serverTimestamp(),
                     submittedAt: new Date().toISOString()
                 });
+
+                // 2. 同時寫入 Google Sheet
+                try {
+                    await fetch(GOOGLE_SCRIPT_URL, {
+                        method: "POST",
+                        mode: "no-cors",
+                        headers: { "Content-Type": "text/plain" },
+                        body: JSON.stringify({
+                            groupName: appState.studentName,
+                            answers: appState.answers
+                        })
+                    });
+                } catch (sheetErr) {
+                    console.warn("寫入 Google Sheet 時出現問題（但不影響 Firestore）：", sheetErr);
+                }
+
                 closeSubmitModal();
-                alert("🎉 提交成功！答案已儲存。");
-            } catch (err) { alert("提交失敗：" + err.message); }
+                alert("🎉 提交成功！答案已儲存至系統及 Google Sheet。");
+            } catch (err) {
+                alert("提交失敗：" + err.message);
+            }
         }
 
         initApp();
