@@ -1,1 +1,660 @@
-See local file - content too large for single tool call. Please upload manually or use git.
+<!DOCTYPE html>
+<html lang="zh-HK">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>從社區保育看可持續發展 - 長洲社區考察</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; }
+        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800 pb-16">
+
+    <header class="bg-emerald-700 text-white shadow-md sticky top-0 z-50">
+        <div class="max-w-md mx-auto px-4 py-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <i class="fa-solid fa-compass text-emerald-300 text-xl"></i>
+                <div>
+                    <h1 class="font-bold text-base leading-tight">長洲社區保育考察</h1>
+                    <p class="text-xs text-emerald-100">從社區保育看可持續發展</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2">
+                <button id="testModeBtn" onclick="toggleTestMode()" class="bg-emerald-800 hover:bg-emerald-900 text-xs px-2 py-1.5 rounded-lg border border-emerald-500/30 flex items-center gap-1">
+                    <span id="testStatusIcon">🐛</span>
+                    <span id="testStatusText" class="text-[11px]">測試: 關</span>
+                </button>
+                <button id="teacherBtn" onclick="handleTeacherClick()" class="bg-white/20 hover:bg-white/30 text-xs px-2.5 py-1.5 rounded-lg flex items-center gap-1">
+                    <i class="fa-solid fa-chalkboard-user"></i>
+                    <span id="teacherBtnText">老師</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-md mx-auto px-4 pt-4">
+
+        <div id="loadingScreen" class="text-center py-16">
+            <i class="fa-solid fa-spinner fa-spin text-3xl text-emerald-600 mb-3"></i>
+            <p class="text-sm text-slate-600">載入中...</p>
+        </div>
+
+        <section id="section-1" class="hidden bg-white rounded-2xl shadow-sm border border-slate-200 p-5 animate-fade-in">
+            <div class="text-center mb-5">
+                <div class="w-14 h-14 bg-emerald-100 text-emerald-700 rounded-full flex items-center justify-center mx-auto mb-2 text-2xl">
+                    <i class="fa-solid fa-clipboard-user"></i>
+                </div>
+                <h2 class="text-lg font-bold text-slate-800">請輸入資料</h2>
+                <p class="text-xs text-slate-500 mt-1">請填寫組別以開始長洲實地考察作答</p>
+            </div>
+            <form id="userInfoForm" onsubmit="handleStartTrip(event)" class="space-y-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">組別 <span class="text-red-500">*</span></label>
+                    <input type="text" id="inputStudentName" required placeholder="例如：第 1 組" class="w-full px-3.5 py-2.5 text-sm rounded-xl border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">
+                </div>
+                <div class="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs text-slate-600">
+                    <p class="font-semibold text-slate-700 flex items-center gap-1 mb-1"><i class="fa-solid fa-location-dot text-emerald-600"></i> GPS 地點解鎖說明</p>
+                    <p>到達各指定景點 <strong>50 米範圍內</strong>，對應的考察題目才會自動解鎖。</p>
+                </div>
+                <button type="submit" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shadow text-sm flex items-center justify-center gap-2">
+                    開始考察旅程 <i class="fa-solid fa-arrow-right"></i>
+                </button>
+            </form>
+        </section>
+
+        <div id="userBadgeBar" class="hidden mb-4 bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex justify-between items-center">
+            <div class="flex items-center space-x-2">
+                <div class="w-8 h-8 rounded-full bg-emerald-600 text-white flex items-center justify-center text-sm"><i class="fa-solid fa-users"></i></div>
+                <div id="displayStudentName" class="font-semibold text-sm text-slate-800">組別</div>
+            </div>
+            <button onclick="resetUserInfo()" class="text-xs text-emerald-700 hover:underline">修改</button>
+        </div>
+
+        <section id="locationHub" class="hidden space-y-3 animate-fade-in">
+            <div class="flex justify-between items-center">
+                <h3 class="text-sm font-bold text-slate-700 flex items-center gap-1.5"><i class="fa-solid fa-map-location-dot text-emerald-600"></i> 考察景點列表</h3>
+                <button onclick="updateGPSLocation()" class="text-xs bg-slate-200 hover:bg-slate-300 px-2.5 py-1 rounded-lg text-slate-700 flex items-center gap-1">
+                    <i class="fa-solid fa-arrows-rotate text-[10px]"></i> 刷新定位
+                </button>
+            </div>
+            <div id="gpsStatusBanner" class="bg-amber-50 border border-amber-200 text-amber-800 rounded-xl p-3 text-xs flex items-center gap-2">
+                <i class="fa-solid fa-spinner fa-spin text-amber-600" id="gpsIcon"></i>
+                <span id="gpsMessage">正在擷取 GPS 位置...</span>
+            </div>
+            <div id="testAutoFillBanner" class="hidden bg-amber-100 border border-amber-300 rounded-xl p-3 flex justify-between items-center text-xs">
+                <div class="text-amber-900"><span class="font-bold">🐛 測試模式已開啟</span><p class="text-[11px] text-amber-700">可一鍵填入測試答案</p></div>
+                <button onclick="fillDummyTestAnswers()" class="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-lg text-xs">一鍵填滿</button>
+            </div>
+            <div id="locationCardsContainer" class="space-y-3"></div>
+            <div class="pt-4">
+                <button onclick="showSubmitConfirmModal()" class="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md flex items-center justify-center gap-2">
+                    <i class="fa-solid fa-paper-plane"></i> 提交所有答案
+                </button>
+            </div>
+        </section>
+
+        <section id="questionsSection" class="hidden bg-white rounded-2xl shadow-md border border-slate-200 p-5 animate-fade-in">
+            <div class="flex justify-between items-start mb-4 border-b border-slate-100 pb-3">
+                <h2 id="currentSecTitle" class="text-lg font-bold text-slate-800"></h2>
+                <button onclick="backToHub()" class="text-slate-400 hover:text-slate-600 text-xl p-1"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <form id="questionsForm" onsubmit="handleSaveAnswers(event)" class="space-y-5">
+                <div id="questionsContainer" class="space-y-5"></div>
+                <div class="pt-3 border-t border-slate-100 flex gap-2">
+                    <button type="button" onclick="backToHub()" class="w-1/3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-xl text-xs">返回</button>
+                    <button type="submit" class="w-2/3 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs flex items-center justify-center gap-1">
+                        <i class="fa-solid fa-check"></i> 儲存本頁答案
+                    </button>
+                </div>
+            </form>
+        </section>
+
+        <section id="adminPanel" class="hidden space-y-4 animate-fade-in">
+            <div class="bg-white rounded-2xl shadow-sm border border-slate-200 p-4">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="font-bold text-slate-800 flex items-center gap-2"><i class="fa-solid fa-screwdriver-wrench text-emerald-600"></i> 老師後台</h2>
+                    <button onclick="logoutTeacher()" class="text-xs text-rose-600 hover:underline">登出</button>
+                </div>
+                <p class="text-xs text-slate-500 mb-3" id="adminEmailDisplay"></p>
+                <div class="flex gap-2 mb-4">
+                    <button onclick="showAdminLocations()" class="flex-1 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-lg">景點與問題</button>
+                    <button onclick="showAdminAnswers()" class="flex-1 py-2 bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg">查看提交</button>
+                </div>
+            </div>
+            <div id="adminLocationsView" class="space-y-3">
+                <div class="flex justify-between items-center">
+                    <h3 class="text-sm font-bold text-slate-700">景點列表</h3>
+                    <button onclick="addNewLocation()" class="text-xs bg-emerald-600 text-white px-3 py-1.5 rounded-lg">+ 新增景點</button>
+                </div>
+                <div id="adminLocationsList" class="space-y-3"></div>
+            </div>
+            <div id="adminAnswersView" class="hidden space-y-3">
+                <h3 class="text-sm font-bold text-slate-700">學生提交紀錄</h3>
+                <div id="adminAnswersList" class="space-y-2 text-xs"></div>
+                <button onclick="exportAnswersCSV()" class="w-full py-2.5 bg-blue-600 text-white text-xs font-semibold rounded-xl">下載 CSV 匯出</button>
+            </div>
+        </section>
+
+        <div id="submitModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl max-w-sm w-full p-5 shadow-2xl text-center space-y-4">
+                <div class="w-12 h-12 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center mx-auto text-xl"><i class="fa-solid fa-file-export"></i></div>
+                <h3 class="font-bold text-slate-800">確認提交答案？</h3>
+                <div id="submissionSummary" class="text-xs bg-slate-50 p-3 rounded-xl border text-left text-slate-600"></div>
+                <div class="flex gap-2">
+                    <button onclick="closeSubmitModal()" class="w-1/2 py-2 bg-slate-100 text-slate-700 font-medium rounded-xl text-xs">繼續檢查</button>
+                    <button onclick="confirmFinalSubmit()" class="w-1/2 py-2 bg-blue-600 text-white font-medium rounded-xl text-xs">確定提交</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="editLocModal" class="hidden fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+            <div class="bg-white rounded-2xl max-w-md w-full p-5 shadow-2xl max-h-[90vh] overflow-y-auto space-y-4">
+                <div class="flex justify-between items-center border-b pb-2">
+                    <h3 class="font-bold text-slate-800 text-sm" id="editLocTitle">編輯景點</h3>
+                    <button onclick="closeEditLocModal()" class="text-slate-400"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="space-y-3 text-xs">
+                    <div>
+                        <label class="font-semibold text-slate-700">景點名稱</label>
+                        <input id="editLocName" class="w-full mt-1 px-3 py-2 border rounded-lg">
+                    </div>
+                    <div>
+                        <label class="font-semibold text-slate-700">簡介</label>
+                        <textarea id="editLocDesc" rows="2" class="w-full mt-1 px-3 py-2 border rounded-lg"></textarea>
+                    </div>
+                    <div class="grid grid-cols-2 gap-2">
+                        <div>
+                            <label class="font-semibold text-slate-700">緯度 lat</label>
+                            <input id="editLocLat" type="number" step="any" class="w-full mt-1 px-3 py-2 border rounded-lg">
+                        </div>
+                        <div>
+                            <label class="font-semibold text-slate-700">經度 lng</label>
+                            <input id="editLocLng" type="number" step="any" class="w-full mt-1 px-3 py-2 border rounded-lg">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="font-semibold text-slate-700 mb-1 block">問題列表</label>
+                        <div id="editQuestionsList" class="space-y-2"></div>
+                        <button type="button" onclick="addQuestionRow()" class="mt-2 text-xs text-emerald-600 hover:underline">+ 新增問題</button>
+                    </div>
+                </div>
+                <div class="flex gap-2 pt-2">
+                    <button onclick="closeEditLocModal()" class="w-1/3 py-2 bg-slate-100 text-xs rounded-xl">取消</button>
+                    <button onclick="saveLocationEdit()" class="w-2/3 py-2 bg-emerald-600 text-white text-xs font-semibold rounded-xl">儲存</button>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyAgPmL3r8VZrGLHCYdAnYJQ1cOuVrF9Myk",
+            authDomain: "field-trip-fb.firebaseapp.com",
+            projectId: "field-trip-fb",
+            storageBucket: "field-trip-fb.firebasestorage.app",
+            messagingSenderId: "800832107287",
+            appId: "1:800832107287:web:0772359376e2609cb0bd52"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const auth = firebase.auth();
+        const db = firebase.firestore();
+        const ALLOWED_DOMAIN = "caritasfsc.edu.hk";
+
+        const SEED_LOCATIONS = [
+            { id: "sec2", name: "長洲玉虛宮 (北帝廟)", lat: 22.212002, lng: 114.027749, description: "歷史悠久的廟宇，是長洲太平清醮的中心。", order: 1,
+              questions: [
+                { id: "q2_1", text: "1. 廟內放置了中國故事十兄弟中的其中兩位，他們是誰呢？", order: 1 },
+                { id: "q2_2", text: "2. 廟內的左右兩邊牆上各有一幅神獸的陶瓷雕刻，分別是甚麼呢？", order: 2 },
+                { id: "q2_3", text: "3. 廟內有一銅鐘，上面刻了哪一句祝福語呢？", order: 3 }
+              ]},
+            { id: "sec3", name: "天后古廟 (近北社新村)", lat: 22.204505, lng: 114.028731, description: "見證長洲漁業發展的重要宗教場所。", order: 2,
+              questions: [
+                { id: "q3_1", text: "1. 廟宇位於哪一項社區設施內？", order: 1 },
+                { id: "q3_2", text: "2. 廟宇大門旁的壁畫是繪畫？還是雕刻？", order: 2 },
+                { id: "q3_3", text: "3. 廟內放置了一種古時的交通工具，是甚麼呢？", order: 3 }
+              ]},
+            { id: "sec4", name: "長洲醫院", lat: 22.207800, lng: 114.031481, description: "為長洲居民提供醫療服務的重要設施。", order: 3,
+              questions: [
+                { id: "q4_1", text: "1. 長洲醫院的英文名稱是甚麼？", order: 1 },
+                { id: "q4_2", text: "2. 醫院外牆上展示了哪兩位捐款人名字呢？", order: 2 },
+                { id: "q4_3", text: "3. 急症室入口的大門是甚麼形狀的？", order: 3 }
+              ]},
+            { id: "sec5", name: "長洲方便醫院", lat: 22.206927, lng: 114.031034, description: "歷史遺跡，昔日為貧苦大眾提供醫療及殮葬服務。", order: 4,
+              questions: [
+                { id: "q5_1", text: "1. 方便醫院旁有一座單層小建築，它原有的用途是甚麼呢？", order: 1 },
+                { id: "q5_2", text: "2. 方便醫院附近有一塊紀念碑，刻上了這建築物創立人的名字，他是誰？", order: 2 }
+              ]},
+            { id: "sec6", name: "長洲戲院", lat: 22.208477, lng: 114.028198, description: "香港最古老的戰前戲院之一，現已活化。", order: 5,
+              questions: [
+                { id: "q6_1", text: "1. 觀察長洲戲院的牌匾，其中一個字的字體是特別不同的，請把它寫出來。", order: 1 },
+                { id: "q6_2", text: "2. 長洲戲院內的座椅是甚麼顏色？", order: 2 }
+              ]}
+        ];
+
+        let LOCATIONS = [];
+        let appState = {
+            studentName: "", testMode: false, currentCoords: null,
+            answers: {}, currentLocationId: null, teacher: null, editingLocId: null
+        };
+
+        async function initApp() {
+            try {
+                await ensureSeedData();
+                await loadLocations();
+                document.getElementById("loadingScreen").classList.add("hidden");
+                document.getElementById("section-1").classList.remove("hidden");
+                auth.onAuthStateChanged(user => {
+                    if (user && user.email && user.email.endsWith("@" + ALLOWED_DOMAIN)) {
+                        appState.teacher = user;
+                        document.getElementById("teacherBtnText").textContent = "後台";
+                    } else {
+                        appState.teacher = null;
+                        document.getElementById("teacherBtnText").textContent = "老師";
+                        if (!document.getElementById("adminPanel").classList.contains("hidden")) showStudentView();
+                    }
+                });
+            } catch (err) {
+                console.error(err);
+                document.getElementById("loadingScreen").innerHTML = '<p class="text-rose-600 text-sm">載入失敗：' + err.message + '</p>';
+            }
+        }
+
+        async function ensureSeedData() {
+            const snap = await db.collection("locations").limit(1).get();
+            if (snap.empty) {
+                const batch = db.batch();
+                SEED_LOCATIONS.forEach(loc => {
+                    batch.set(db.collection("locations").doc(loc.id), {
+                        name: loc.name, description: loc.description,
+                        lat: loc.lat, lng: loc.lng, order: loc.order, questions: loc.questions
+                    });
+                });
+                await batch.commit();
+            }
+        }
+
+        async function loadLocations() {
+            const snap = await db.collection("locations").orderBy("order").get();
+            LOCATIONS = snap.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            LOCATIONS.forEach(loc => {
+                if (loc.questions) loc.questions.forEach((q, i) => { if (!q.id) q.id = loc.id + "_q" + (i+1); });
+            });
+        }
+
+        function handleTeacherClick() {
+            if (appState.teacher) showAdminPanel();
+            else loginTeacher();
+        }
+
+        function loginTeacher() {
+            const provider = new firebase.auth.GoogleAuthProvider();
+            provider.setCustomParameters({ hd: ALLOWED_DOMAIN });
+            auth.signInWithPopup(provider).then(result => {
+                const email = result.user.email || "";
+                if (!email.endsWith("@" + ALLOWED_DOMAIN)) {
+                    auth.signOut();
+                    alert("只有 @" + ALLOWED_DOMAIN + " 的帳號可以登入老師後台。");
+                    return;
+                }
+                appState.teacher = result.user;
+                showAdminPanel();
+            }).catch(err => alert("登入失敗：" + err.message));
+        }
+
+        function logoutTeacher() {
+            auth.signOut().then(() => { appState.teacher = null; showStudentView(); });
+        }
+
+        function showAdminPanel() {
+            document.getElementById("section-1").classList.add("hidden");
+            document.getElementById("userBadgeBar").classList.add("hidden");
+            document.getElementById("locationHub").classList.add("hidden");
+            document.getElementById("questionsSection").classList.add("hidden");
+            document.getElementById("adminPanel").classList.remove("hidden");
+            document.getElementById("adminEmailDisplay").textContent = "已登入：" + (appState.teacher?.email || "");
+            showAdminLocations();
+        }
+
+        function showStudentView() {
+            document.getElementById("adminPanel").classList.add("hidden");
+            if (appState.studentName) {
+                document.getElementById("userBadgeBar").classList.remove("hidden");
+                document.getElementById("locationHub").classList.remove("hidden");
+            } else {
+                document.getElementById("section-1").classList.remove("hidden");
+            }
+        }
+
+        function showAdminLocations() {
+            document.getElementById("adminLocationsView").classList.remove("hidden");
+            document.getElementById("adminAnswersView").classList.add("hidden");
+            renderAdminLocations();
+        }
+
+        function showAdminAnswers() {
+            document.getElementById("adminLocationsView").classList.add("hidden");
+            document.getElementById("adminAnswersView").classList.remove("hidden");
+            loadAdminAnswers();
+        }
+
+        function renderAdminLocations() {
+            const container = document.getElementById("adminLocationsList");
+            container.innerHTML = "";
+            LOCATIONS.forEach(loc => {
+                const div = document.createElement("div");
+                div.className = "bg-white border border-slate-200 rounded-xl p-3";
+                div.innerHTML = '<div class="flex justify-between items-start"><div><div class="font-bold text-sm text-slate-800">' + loc.name + '</div><div class="text-[11px] text-slate-500 mt-0.5">' + ((loc.questions||[]).length) + ' 條問題 · ' + loc.lat + ', ' + loc.lng + '</div></div><div class="flex gap-1"><button onclick="openEditLocation(\'' + loc.id + '\')" class="text-xs bg-slate-100 hover:bg-slate-200 px-2 py-1 rounded">編輯</button><button onclick="deleteLocation(\'' + loc.id + '\')" class="text-xs bg-rose-50 text-rose-600 hover:bg-rose-100 px-2 py-1 rounded">刪除</button></div></div>';
+                container.appendChild(div);
+            });
+        }
+
+        function addNewLocation() {
+            appState.editingLocId = null;
+            document.getElementById("editLocTitle").textContent = "新增景點";
+            document.getElementById("editLocName").value = "";
+            document.getElementById("editLocDesc").value = "";
+            document.getElementById("editLocLat").value = "";
+            document.getElementById("editLocLng").value = "";
+            document.getElementById("editQuestionsList").innerHTML = "";
+            addQuestionRow();
+            document.getElementById("editLocModal").classList.remove("hidden");
+        }
+
+        function openEditLocation(id) {
+            const loc = LOCATIONS.find(l => l.id === id);
+            if (!loc) return;
+            appState.editingLocId = id;
+            document.getElementById("editLocTitle").textContent = "編輯景點";
+            document.getElementById("editLocName").value = loc.name || "";
+            document.getElementById("editLocDesc").value = loc.description || "";
+            document.getElementById("editLocLat").value = loc.lat || "";
+            document.getElementById("editLocLng").value = loc.lng || "";
+            const list = document.getElementById("editQuestionsList");
+            list.innerHTML = "";
+            (loc.questions || []).forEach(q => addQuestionRow(q.text, q.id));
+            document.getElementById("editLocModal").classList.remove("hidden");
+        }
+
+        function addQuestionRow(text, id) {
+            text = text || ""; id = id || "";
+            const list = document.getElementById("editQuestionsList");
+            const row = document.createElement("div");
+            row.className = "flex gap-2 items-start";
+            row.innerHTML = '<input type="hidden" class="q-id" value="' + id + '"><textarea class="q-text flex-1 px-2 py-1.5 border rounded-lg text-xs" rows="2" placeholder="問題文字...">' + text + '</textarea><button type="button" onclick="this.parentElement.remove()" class="text-rose-500 text-xs mt-1">刪</button>';
+            list.appendChild(row);
+        }
+
+        function closeEditLocModal() { document.getElementById("editLocModal").classList.add("hidden"); }
+
+        async function saveLocationEdit() {
+            const name = document.getElementById("editLocName").value.trim();
+            const description = document.getElementById("editLocDesc").value.trim();
+            const lat = parseFloat(document.getElementById("editLocLat").value);
+            const lng = parseFloat(document.getElementById("editLocLng").value);
+            if (!name) { alert("請填寫景點名稱"); return; }
+            const questionRows = document.querySelectorAll("#editQuestionsList > div");
+            const questions = [];
+            questionRows.forEach((row, i) => {
+                const text = row.querySelector(".q-text").value.trim();
+                let id = row.querySelector(".q-id").value;
+                if (!text) return;
+                if (!id) id = "q_" + Date.now() + "_" + i;
+                questions.push({ id, text, order: i + 1 });
+            });
+            const data = {
+                name, description,
+                lat: isNaN(lat) ? 0 : lat,
+                lng: isNaN(lng) ? 0 : lng,
+                questions,
+                order: appState.editingLocId ? (LOCATIONS.find(l => l.id === appState.editingLocId)?.order || 99) : (LOCATIONS.length + 1)
+            };
+            try {
+                if (appState.editingLocId) {
+                    await db.collection("locations").doc(appState.editingLocId).set(data, { merge: true });
+                } else {
+                    await db.collection("locations").doc("loc_" + Date.now()).set(data);
+                }
+                await loadLocations();
+                closeEditLocModal();
+                renderAdminLocations();
+                alert("已儲存！");
+            } catch (err) { alert("儲存失敗：" + err.message); }
+        }
+
+        async function deleteLocation(id) {
+            if (!confirm("確定刪除這個景點及其所有問題？")) return;
+            try {
+                await db.collection("locations").doc(id).delete();
+                await loadLocations();
+                renderAdminLocations();
+            } catch (err) { alert("刪除失敗：" + err.message); }
+        }
+
+        async function loadAdminAnswers() {
+            const container = document.getElementById("adminAnswersList");
+            container.innerHTML = "<p class='text-slate-500'>載入中...</p>";
+            try {
+                const snap = await db.collection("answers").orderBy("timestamp", "desc").limit(50).get();
+                if (snap.empty) { container.innerHTML = "<p class='text-slate-500'>暫無提交紀錄</p>"; return; }
+                container.innerHTML = "";
+                snap.docs.forEach(doc => {
+                    const d = doc.data();
+                    const ansCount = Object.keys(d.answers || {}).filter(k => d.answers[k]).length;
+                    const div = document.createElement("div");
+                    div.className = "bg-white border rounded-xl p-3";
+                    div.innerHTML = '<div class="font-semibold text-slate-800">' + (d.groupName || "未命名") + '</div><div class="text-[11px] text-slate-500">' + (d.timestamp?.toDate ? d.timestamp.toDate().toLocaleString("zh-HK") : "") + ' · ' + ansCount + ' 題已填</div>';
+                    container.appendChild(div);
+                });
+            } catch (err) { container.innerHTML = "<p class='text-rose-500'>載入失敗</p>"; }
+        }
+
+        async function exportAnswersCSV() {
+            try {
+                const snap = await db.collection("answers").orderBy("timestamp", "desc").get();
+                let headers = ["提交時間", "組別"];
+                LOCATIONS.forEach(l => (l.questions || []).forEach(q => headers.push(l.name + " - " + q.text)));
+                let rows = [headers.map(h => '"' + h.replace(/"/g, '""') + '"').join(",")];
+                snap.docs.forEach(doc => {
+                    const d = doc.data();
+                    let row = [d.timestamp?.toDate ? d.timestamp.toDate().toLocaleString("zh-HK") : "", d.groupName || ""];
+                    LOCATIONS.forEach(l => (l.questions || []).forEach(q => row.push(d.answers?.[q.id] || "")));
+                    rows.push(row.map(c => '"' + String(c).replace(/"/g, '""') + '"').join(","));
+                });
+                const blob = new Blob(["\uFEFF" + rows.join("\n")], { type: "text/csv;charset=utf-8;" });
+                const a = document.createElement("a");
+                a.href = URL.createObjectURL(blob);
+                a.download = "長洲考察_提交紀錄_" + Date.now() + ".csv";
+                a.click();
+            } catch (err) { alert("匯出失敗：" + err.message); }
+        }
+
+        function handleStartTrip(e) {
+            e.preventDefault();
+            const name = document.getElementById("inputStudentName").value.trim();
+            if (!name) return;
+            appState.studentName = name;
+            const draft = localStorage.getItem("cc_trip_draft_" + name);
+            if (draft) { try { appState.answers = JSON.parse(draft); } catch(e) {} }
+            document.getElementById("displayStudentName").textContent = name;
+            document.getElementById("section-1").classList.add("hidden");
+            document.getElementById("userBadgeBar").classList.remove("hidden");
+            document.getElementById("locationHub").classList.remove("hidden");
+            updateGPSLocation();
+            renderLocationCards();
+        }
+
+        function resetUserInfo() {
+            if (confirm("確定要修改組別嗎？（已填寫的答案會保留在草稿中）")) {
+                document.getElementById("userBadgeBar").classList.add("hidden");
+                document.getElementById("locationHub").classList.add("hidden");
+                document.getElementById("questionsSection").classList.add("hidden");
+                document.getElementById("section-1").classList.remove("hidden");
+            }
+        }
+
+        function autoSaveAnswer(qId, val) {
+            appState.answers[qId] = val.trim();
+            if (appState.studentName) localStorage.setItem("cc_trip_draft_" + appState.studentName, JSON.stringify(appState.answers));
+        }
+
+        function openQuestions(locationId) {
+            const loc = LOCATIONS.find(l => l.id === locationId);
+            if (!loc) return;
+            appState.currentLocationId = locationId;
+            document.getElementById("currentSecTitle").textContent = loc.name;
+            const container = document.getElementById("questionsContainer");
+            container.innerHTML = "";
+            (loc.questions || []).forEach(q => {
+                const savedVal = appState.answers[q.id] || "";
+                const qBox = document.createElement("div");
+                qBox.className = "space-y-1.5 bg-slate-50 p-3.5 rounded-xl border border-slate-200";
+                qBox.innerHTML = '<label class="block text-xs font-semibold text-slate-800 leading-snug">' + q.text + '</label><textarea id="input_' + q.id + '" rows="2" placeholder="請輸入答案..." class="w-full px-3 py-2 text-xs rounded-lg border border-slate-300 focus:ring-2 focus:ring-emerald-500 outline-none">' + savedVal + '</textarea>';
+                container.appendChild(qBox);
+                qBox.querySelector("textarea").oninput = function() { autoSaveAnswer(q.id, this.value); };
+            });
+            document.getElementById("locationHub").classList.add("hidden");
+            document.getElementById("questionsSection").classList.remove("hidden");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function backToHub() {
+            const loc = LOCATIONS.find(l => l.id === appState.currentLocationId);
+            if (loc) (loc.questions || []).forEach(q => {
+                const el = document.getElementById("input_" + q.id);
+                if (el) autoSaveAnswer(q.id, el.value);
+            });
+            document.getElementById("questionsSection").classList.add("hidden");
+            document.getElementById("locationHub").classList.remove("hidden");
+            renderLocationCards();
+        }
+
+        function handleSaveAnswers(e) { if (e) e.preventDefault(); backToHub(); }
+
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3;
+            const φ1 = lat1 * Math.PI / 180, φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180, Δλ = (lon2 - lon1) * Math.PI / 180;
+            const a = Math.sin(Δφ/2)**2 + Math.cos(φ1)*Math.cos(φ2)*Math.sin(Δλ/2)**2;
+            return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+        }
+
+        function updateGPSLocation() {
+            const icon = document.getElementById("gpsIcon");
+            const msg = document.getElementById("gpsMessage");
+            if (!navigator.geolocation) { msg.textContent = "瀏覽器不支援 GPS。"; icon.className = "fa-solid fa-triangle-exclamation text-amber-600"; return; }
+            msg.textContent = "正在擷取 GPS 位置...";
+            icon.className = "fa-solid fa-spinner fa-spin text-amber-600";
+            navigator.geolocation.getCurrentPosition(
+                pos => {
+                    appState.currentCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+                    msg.textContent = "GPS 位置已更新！";
+                    icon.className = "fa-solid fa-circle-check text-emerald-600";
+                    renderLocationCards();
+                },
+                err => {
+                    msg.textContent = "無法取得 GPS（可開測試模式）";
+                    icon.className = "fa-solid fa-location-crosshairs text-rose-500";
+                    renderLocationCards();
+                },
+                { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+            );
+        }
+
+        function renderLocationCards() {
+            const container = document.getElementById("locationCardsContainer");
+            container.innerHTML = "";
+            LOCATIONS.forEach(loc => {
+                let distanceMeters = null;
+                let isUnlocked = appState.testMode;
+                if (appState.currentCoords) {
+                    distanceMeters = calculateDistance(appState.currentCoords.lat, appState.currentCoords.lng, loc.lat, loc.lng);
+                    if (distanceMeters <= 50) isUnlocked = true;
+                }
+                let answeredCount = 0;
+                (loc.questions || []).forEach(q => { if (appState.answers[q.id] && appState.answers[q.id].trim()) answeredCount++; });
+                const isCompleted = answeredCount === (loc.questions || []).length && answeredCount > 0;
+                let statusText = appState.testMode ? '<span class="text-amber-600 font-medium">🐛 測試模式（已解鎖）</span>' :
+                    distanceMeters !== null ? '距離：<strong>' + Math.round(distanceMeters) + ' 米</strong> (' + (distanceMeters <= 50 ? '✅ 50米內' : '❌ 尚未到達') + ')' : '等待 GPS 定位...';
+                const card = document.createElement("div");
+                card.className = "p-4 rounded-2xl border transition shadow-sm " + (isUnlocked ? "bg-white border-emerald-300" : "bg-slate-100 border-slate-200 opacity-80");
+                card.innerHTML = '<div class="flex justify-between items-start mb-2"><h4 class="font-bold text-slate-800 text-base flex items-center gap-1.5">' + loc.name + (isCompleted ? ' <i class="fa-solid fa-circle-check text-emerald-500 text-sm"></i>' : '') + '</h4><span class="text-xs px-2 py-1 rounded-lg font-semibold ' + (isUnlocked ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600') + '">' + (isUnlocked ? '<i class="fa-solid fa-lock-open mr-1"></i>已解鎖' : '<i class="fa-solid fa-lock mr-1"></i>已鎖定') + '</span></div><p class="text-xs text-slate-500 mb-2">' + (loc.description || "") + '</p><div class="flex justify-between items-center text-xs pt-2 border-t border-slate-100"><span class="text-slate-500">' + statusText + '</span><span class="font-medium text-slate-600">已填答: ' + answeredCount + '/' + ((loc.questions||[]).length) + '</span></div><button onclick="' + (isUnlocked ? "openQuestions('" + loc.id + "')" : "alert('需要到達景點 50 米範圍內才能解鎖（或開啟測試模式）')") + '" class="w-full mt-3 py-2.5 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition ' + (isUnlocked ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow' : 'bg-slate-200 text-slate-500 cursor-not-allowed') + '">' + (isUnlocked ? '<i class="fa-solid fa-pen-to-square"></i> 進入回答問題' : '<i class="fa-solid fa-location-dot"></i> 未到達地點') + '</button>';
+                container.appendChild(card);
+            });
+        }
+
+        function toggleTestMode() {
+            appState.testMode = !appState.testMode;
+            const btn = document.getElementById("testModeBtn");
+            const text = document.getElementById("testStatusText");
+            const banner = document.getElementById("testAutoFillBanner");
+            if (appState.testMode) {
+                text.textContent = "測試: 開";
+                btn.classList.add("bg-amber-600"); btn.classList.remove("bg-emerald-800");
+                if (banner) banner.classList.remove("hidden");
+            } else {
+                text.textContent = "測試: 關";
+                btn.classList.remove("bg-amber-600"); btn.classList.add("bg-emerald-800");
+                if (banner) banner.classList.add("hidden");
+            }
+            renderLocationCards();
+        }
+
+        function fillDummyTestAnswers() {
+            LOCATIONS.forEach(l => (l.questions || []).forEach((q, idx) => {
+                appState.answers[q.id] = "[測試] " + l.name + " - 第" + (idx+1) + "題";
+            }));
+            if (appState.studentName) localStorage.setItem("cc_trip_draft_" + appState.studentName, JSON.stringify(appState.answers));
+            alert("已填入測試答案！");
+            renderLocationCards();
+        }
+
+        function showSubmitConfirmModal() {
+            if (!appState.studentName) { alert("請先填寫組別！"); return; }
+            if (appState.currentLocationId) {
+                const loc = LOCATIONS.find(l => l.id === appState.currentLocationId);
+                if (loc) (loc.questions||[]).forEach(q => {
+                    const el = document.getElementById("input_" + q.id);
+                    if (el) autoSaveAnswer(q.id, el.value);
+                });
+            }
+            let totalQ = 0, answeredQ = 0, detail = "";
+            LOCATIONS.forEach(l => {
+                let locA = 0;
+                (l.questions||[]).forEach(q => {
+                    totalQ++;
+                    if (appState.answers[q.id]?.trim()) { answeredQ++; locA++; }
+                });
+                const complete = locA === (l.questions||[]).length;
+                detail += '<li class="flex justify-between py-0.5 border-b border-slate-100 last:border-0 text-[11px]"><span>' + l.name + '</span><span class="' + (complete ? 'text-emerald-600 font-bold' : locA > 0 ? 'text-blue-600' : 'text-slate-400') + '">' + locA + '/' + ((l.questions||[]).length) + (complete ? ' ✅' : '') + '</span></li>';
+            });
+            document.getElementById("submissionSummary").innerHTML = '<p><strong>組別：</strong>' + appState.studentName + '</p><p><strong>完成進度：</strong>' + answeredQ + ' / ' + totalQ + ' 題</p><ul class="mt-2 space-y-0.5">' + detail + '</ul>';
+            document.getElementById("submitModal").classList.remove("hidden");
+        }
+
+        function closeSubmitModal() { document.getElementById("submitModal").classList.add("hidden"); }
+
+        async function confirmFinalSubmit() {
+            try {
+                await db.collection("answers").add({
+                    groupName: appState.studentName,
+                    answers: { ...appState.answers },
+                    timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                    submittedAt: new Date().toISOString()
+                });
+                closeSubmitModal();
+                alert("🎉 提交成功！答案已儲存。");
+            } catch (err) { alert("提交失敗：" + err.message); }
+        }
+
+        initApp();
+    </script>
+</body>
+</html>
